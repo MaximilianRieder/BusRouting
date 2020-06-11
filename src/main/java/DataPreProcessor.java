@@ -1,4 +1,5 @@
 import tech.tablesaw.api.DoubleColumn;
+import tech.tablesaw.api.IntColumn;
 import tech.tablesaw.api.Table;
 import tech.tablesaw.io.csv.CsvReadOptions;
 import tech.tablesaw.selection.Selection;
@@ -12,7 +13,7 @@ public class DataPreProcessor {
     public DataPreProcessor() {
     }
 
-    public RoutingData preProcess(RoutingData rawRoutingData) {
+    public RoutingDataProcessed preProcess(RoutingData rawRoutingData) {
         Table locationInfo = rawRoutingData.getLocationInfo();
         Table scheduleData = rawRoutingData.getScheduleData();
         Table lineCourses = rawRoutingData.getLineCourses();
@@ -64,7 +65,7 @@ public class DataPreProcessor {
         temp = HSmitHP.joinOn("ORT_REF_ORT").leftOuter(locationInfo);
         HSmitHP = temp.select("ORT_REF_ORT", "FREQ", "ORT_NAME", "ORT_REF_ORT_KUERZEL", "ORT_REF_ORT_NAME").dropDuplicateRows();
 
-        //add transfer time (number of hsp minus one)
+        //add transfer time (number of hsp-frequency minus one)
         DoubleColumn transferTime = DoubleColumn.create("TRANSFER_TIME");
         List<Double> frq = HSmitHP.doubleColumn("FREQ").asList();
         for(int k = 0; k < frq.size(); k++) {
@@ -74,10 +75,35 @@ public class DataPreProcessor {
         //exceptions of transfer time
         changeExceptionsTransferTime(HSmitHP);
 
+        Table rideTimetable = drivingTimes.joinOn("FGR_NR").inner(scheduleData);
+        rideTimetable = rideTimetable.sortAscendingOn("FGR_NR", "FRT_START");
 
 
-        System.out.println(HSmitHP.print(2400));
-        return rawRoutingData;
+
+        IntColumn departureC = IntColumn.create("DEPARTURE");
+        IntColumn arrivalC = IntColumn.create("ARRIVAL");
+        int startCoursePrev = -1;
+        int arrivePrev = 0;
+        for (int i = 0; i < rideTimetable.rowCount(); i++) {
+            int startCourse = rideTimetable.intColumn("FRT_START").get(i);
+            int rideTime = rideTimetable.intColumn("SEL_FZT").get(i);
+            if(startCoursePrev != startCourse) {
+                departureC.append(startCourse);
+                arrivalC.append(startCourse + rideTime);
+                arrivePrev = startCourse + rideTime;
+            } else {
+                departureC.append(arrivePrev);
+                arrivalC.append(arrivePrev + rideTime);
+                arrivePrev = arrivePrev + rideTime;
+            }
+            startCoursePrev = startCourse;
+        }
+        rideTimetable.addColumns(departureC, arrivalC);
+
+        System.out.println(rideTimetable.print());
+
+        Table rideEvents = null;
+        return new RoutingDataProcessed(locationInfo,scheduleData,lineCourses,drivingTimes,rideTimetable,rideEvents);
     }
 
     public RoutingData getRawRoutingData() throws IOException {

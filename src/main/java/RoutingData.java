@@ -6,12 +6,14 @@ public class RoutingData {
     private Table lineCourses; //LID_VERLAUF
     private Table drivingTimes; //SEL_FZT_FELD
 
+
     public RoutingData(Table locationInfo, Table scheduleData, Table lineCourses, Table drivingTimes) {
         this.locationInfo = locationInfo;
         this.scheduleData = scheduleData;
         this.lineCourses = lineCourses;
         this.drivingTimes = drivingTimes;
     }
+
 
     public Table getLocationInfo() {
         return locationInfo;
