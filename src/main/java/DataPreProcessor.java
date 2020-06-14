@@ -76,9 +76,16 @@ public class DataPreProcessor {
         changeExceptionsTransferTime(HSmitHP);
 
         Table rideTimetable = drivingTimes.joinOn("FGR_NR").inner(scheduleData);
-        rideTimetable = rideTimetable.sortAscendingOn("FGR_NR", "FRT_START");
 
+        //maintain the stable order after sorting
+        IntColumn ind = IntColumn.create("INDEX_SORT");
+        for(int k = 1; k <= rideTimetable.rowCount(); k++) {
+            ind.append(k);
+        }
+        rideTimetable.addColumns(ind);
 
+        rideTimetable = rideTimetable.sortAscendingOn("FGR_NR", "FRT_START", "INDEX_SORT");
+        rideTimetable.removeColumns("INDEX_SORT");
 
         IntColumn departureC = IntColumn.create("DEPARTURE");
         IntColumn arrivalC = IntColumn.create("ARRIVAL");
