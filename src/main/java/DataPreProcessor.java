@@ -3,6 +3,7 @@ import tech.tablesaw.api.IntColumn;
 import tech.tablesaw.api.Table;
 import tech.tablesaw.io.csv.CsvReadOptions;
 import tech.tablesaw.selection.Selection;
+
 import static tech.tablesaw.aggregate.AggregateFunctions.*;
 
 import java.io.IOException;
@@ -20,14 +21,14 @@ public class DataPreProcessor {
         Table drivingTimes = rawRoutingData.getDrivingTimes();
 
         //cut not relevant data & remove betriebshöfe & remove teststeige + e ladestationen (index 0 based instead 1 based as in r)
-        locationInfo = locationInfo.retainColumns("ONR_TYP_NR", "ORT_NR","ORT_NAME","ORT_REF_ORT","ORT_REF_ORT_KUERZEL","ORT_REF_ORT_NAME");
+        locationInfo = locationInfo.retainColumns("ONR_TYP_NR", "ORT_NR", "ORT_NAME", "ORT_REF_ORT", "ORT_REF_ORT_KUERZEL", "ORT_REF_ORT_NAME");
         locationInfo = locationInfo.where(locationInfo.intColumn("ONR_TYP_NR").isEqualTo(1));
-        locationInfo = locationInfo.dropRows(1,557,562,587,588);
+        locationInfo = locationInfo.dropRows(1, 557, 562, 587, 588);
 
         //cut not relevant data & only serivce fahrten & remove teststeige
         lineCourses = lineCourses.retainColumns("LI_LFD_NR", "LI_NR", "STR_LI_VAR", "ORT_NR", "PRODUKTIV");
         lineCourses = lineCourses.where(lineCourses.intColumn("PRODUKTIV").isEqualTo(1));
-        lineCourses = lineCourses.dropRows(370,371,372,1193, 1194);
+        lineCourses = lineCourses.dropRows(370, 371, 372, 1193, 1194);
 
         //only mondays & no betriebshof as target & cut relevant data
         scheduleData = scheduleData.where(scheduleData.intColumn("TAGESART_NR").isEqualTo(1));
@@ -57,6 +58,7 @@ public class DataPreProcessor {
         locationInfo.stringColumn("ORT_NAME").set(locationInfo.intColumn("ORT_REF_ORT").isEqualTo(320), "Friedhof_Neutraubling");
         locationInfo.stringColumn("ORT_NAME").set(locationInfo.intColumn("ORT_REF_ORT").isEqualTo(2010), "AussigerStra_e_Dolomitenstra_e");
 
+        //create bus stop with breakpoint (how much)
         Table temp = locationInfo.select("ORT_REF_ORT", "ORT_NR");
         Table HSmitHP = temp.summarize("ORT_NR", count).by("ORT_REF_ORT");
         HSmitHP = HSmitHP.sortAscendingOn("ORT_REF_ORT");
@@ -68,25 +70,25 @@ public class DataPreProcessor {
         //add transfer time (number of hsp-frequency minus one)
         DoubleColumn transferTime = DoubleColumn.create("TRANSFER_TIME");
         List<Double> frq = HSmitHP.doubleColumn("FREQ").asList();
-        for(int k = 0; k < frq.size(); k++) {
+        for (int k = 0; k < frq.size(); k++) {
             transferTime.append(frq.get(k) - 1);
         }
         HSmitHP.addColumns(transferTime);
         //exceptions of transfer time
         changeExceptionsTransferTime(HSmitHP);
 
+        //create riding timetable (driving times per breakpoint)
         Table rideTimetable = drivingTimes.joinOn("FGR_NR").inner(scheduleData);
-
         //maintain the stable order after sorting
         IntColumn ind = IntColumn.create("INDEX_SORT");
-        for(int k = 1; k <= rideTimetable.rowCount(); k++) {
+        for (int k = 1; k <= rideTimetable.rowCount(); k++) {
             ind.append(k);
         }
         rideTimetable.addColumns(ind);
-
         rideTimetable = rideTimetable.sortAscendingOn("FGR_NR", "FRT_START", "INDEX_SORT");
         rideTimetable.removeColumns("INDEX_SORT");
 
+        //fill arival and departure
         IntColumn departureC = IntColumn.create("DEPARTURE");
         IntColumn arrivalC = IntColumn.create("ARRIVAL");
         int startCoursePrev = -1;
@@ -94,11 +96,12 @@ public class DataPreProcessor {
         for (int i = 0; i < rideTimetable.rowCount(); i++) {
             int startCourse = rideTimetable.intColumn("FRT_START").get(i);
             int rideTime = rideTimetable.intColumn("SEL_FZT").get(i);
-            if(startCoursePrev != startCourse) {
+            //if there is a new starting time -> start at starting time
+            if (startCoursePrev != startCourse) {
                 departureC.append(startCourse);
                 arrivalC.append(startCourse + rideTime);
                 arrivePrev = startCourse + rideTime;
-            } else {
+            } else { //if starting time is still the same -> calculate driving times
                 departureC.append(arrivePrev);
                 arrivalC.append(arrivePrev + rideTime);
                 arrivePrev = arrivePrev + rideTime;
@@ -107,10 +110,11 @@ public class DataPreProcessor {
         }
         rideTimetable.addColumns(departureC, arrivalC);
 
-        System.out.println(rideTimetable.print());
+        //chose the important variables
+        Table rideEvents = rideTimetable.retainColumns("ORT_NR", "DEPARTURE", "SEL_ZIEL", "ARRIVAL");
+        rideEvents = rideEvents.dropDuplicateRows();
 
-        Table rideEvents = null;
-        return new RoutingDataProcessed(locationInfo,scheduleData,lineCourses,drivingTimes,rideTimetable,rideEvents);
+        return new RoutingDataProcessed(locationInfo, scheduleData, lineCourses, drivingTimes, rideTimetable, rideEvents);
     }
 
     public RoutingData getRawRoutingData() throws IOException {
@@ -125,9 +129,9 @@ public class DataPreProcessor {
     public Table getTableFromCSV(String file) throws IOException {
         CsvReadOptions.Builder builder =
                 CsvReadOptions.builder("src/main/resources/" + file)
-                        .separator(';')										// table is tab-delimited
-                        .header(true)											// no header
-                        .dateFormat("yyyy.MM.dd");  				// the date format to use.
+                        .separator(';')                                        // table is tab-delimited
+                        .header(true)                                            // no header
+                        .dateFormat("yyyy.MM.dd");                // the date format to use.
 
         CsvReadOptions options = builder.build();
 
