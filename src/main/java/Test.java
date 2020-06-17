@@ -5,5 +5,7 @@ public class Test {
         DataPreProcessor dataPreProcessor = new DataPreProcessor();
         RoutingData rawRoutingData = dataPreProcessor.getRawRoutingData();
         RoutingDataProcessed routingDataProcessed = dataPreProcessor.preProcess(rawRoutingData);
+        RoutingSolverSetup routingSolverSetup = new RoutingSolverSetup(routingDataProcessed);
+        routingSolverSetup.setup();
     }
 }

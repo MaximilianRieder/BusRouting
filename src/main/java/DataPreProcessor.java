@@ -58,24 +58,24 @@ public class DataPreProcessor {
         locationInfo.stringColumn("ORT_NAME").set(locationInfo.intColumn("ORT_REF_ORT").isEqualTo(320), "Friedhof_Neutraubling");
         locationInfo.stringColumn("ORT_NAME").set(locationInfo.intColumn("ORT_REF_ORT").isEqualTo(2010), "AussigerStra_e_Dolomitenstra_e");
 
-        //create bus stop with breakpoint (how much)
+        //create bus stop with stop point (how much)
         Table temp = locationInfo.select("ORT_REF_ORT", "ORT_NR");
-        Table HSmitHP = temp.summarize("ORT_NR", count).by("ORT_REF_ORT");
-        HSmitHP = HSmitHP.sortAscendingOn("ORT_REF_ORT");
-        HSmitHP.doubleColumn(1).setName("FREQ");
+        Table BSwithSP = temp.summarize("ORT_NR", count).by("ORT_REF_ORT");
+        BSwithSP = BSwithSP.sortAscendingOn("ORT_REF_ORT");
+        BSwithSP.doubleColumn(1).setName("FREQ");
 
-        temp = HSmitHP.joinOn("ORT_REF_ORT").leftOuter(locationInfo);
-        HSmitHP = temp.select("ORT_REF_ORT", "FREQ", "ORT_NAME", "ORT_REF_ORT_KUERZEL", "ORT_REF_ORT_NAME").dropDuplicateRows();
+        temp = BSwithSP.joinOn("ORT_REF_ORT").leftOuter(locationInfo);
+        BSwithSP = temp.select("ORT_REF_ORT", "FREQ", "ORT_NAME", "ORT_REF_ORT_KUERZEL", "ORT_REF_ORT_NAME").dropDuplicateRows();
 
         //add transfer time (number of hsp-frequency minus one)
         DoubleColumn transferTime = DoubleColumn.create("TRANSFER_TIME");
-        List<Double> frq = HSmitHP.doubleColumn("FREQ").asList();
+        List<Double> frq = BSwithSP.doubleColumn("FREQ").asList();
         for (int k = 0; k < frq.size(); k++) {
             transferTime.append(frq.get(k) - 1);
         }
-        HSmitHP.addColumns(transferTime);
+        BSwithSP.addColumns(transferTime);
         //exceptions of transfer time
-        changeExceptionsTransferTime(HSmitHP);
+        changeExceptionsTransferTime(BSwithSP);
 
         //create riding timetable (driving times per breakpoint)
         Table rideTimetable = drivingTimes.joinOn("FGR_NR").inner(scheduleData);
